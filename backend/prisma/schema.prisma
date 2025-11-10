@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model bets {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id          String?   @db.Uuid
+  match_id         String?   @db.Uuid
+  team_id          String?   @db.Uuid
+  amount           Decimal   @db.Decimal(8, 2)
+  odds             Decimal   @db.Decimal(4, 2)
+  potential_payout Decimal   @db.Decimal(10, 2)
+  status           String?   @default("pending") @db.VarChar(20)
+  placed_at        DateTime? @default(now()) @db.Timestamp(6)
+  matches          matches?  @relation(fields: [match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  teams            teams?    @relation(fields: [team_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users            users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([match_id], map: "idx_bets_match")
+  @@index([status], map: "idx_bets_status")
+  @@index([user_id], map: "idx_bets_user")
+}
+
+model games {
+  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name        String        @db.VarChar(100)
+  category    String        @db.VarChar(50)
+  created_at  DateTime?     @default(now()) @db.Timestamp(6)
+  matches     matches[]
+  tournaments tournaments[]
+}
+
+model match_odds {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  match_id   String?   @db.Uuid
+  team_id    String?   @db.Uuid
+  odds       Decimal   @db.Decimal(4, 2)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+  matches    matches?  @relation(fields: [match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  teams      teams?    @relation(fields: [team_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model matches {
+  id                             String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tournament_id                  String?      @db.Uuid
+  team1_id                       String?      @db.Uuid
+  team2_id                       String?      @db.Uuid
+  game_id                        String?      @db.Uuid
+  match_date                     DateTime?    @db.Timestamp(6)
+  status                         String?      @default("scheduled") @db.VarChar(20)
+  team1_score                    Int?         @default(0)
+  team2_score                    Int?         @default(0)
+  winner_id                      String?      @db.Uuid
+  format                         String?      @db.VarChar(50)
+  created_at                     DateTime?    @default(now()) @db.Timestamp(6)
+  bets                           bets[]
+  match_odds                     match_odds[]
+  games                          games?       @relation(fields: [game_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  teams_matches_team1_idToteams  teams?       @relation("matches_team1_idToteams", fields: [team1_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  teams_matches_team2_idToteams  teams?       @relation("matches_team2_idToteams", fields: [team2_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tournaments                    tournaments? @relation(fields: [tournament_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  teams_matches_winner_idToteams teams?       @relation("matches_winner_idToteams", fields: [winner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([match_date], map: "idx_matches_date")
+  @@index([status], map: "idx_matches_status")
+}
+
+model players {
+  id                  String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  username            String         @unique @db.VarChar(50)
+  real_name           String?        @db.VarChar(100)
+  country             String?        @default("FR") @db.VarChar(3)
+  age                 Int?
+  role                String?        @db.VarChar(50)
+  avatar_url          String?        @db.VarChar(255)
+  total_earnings      Decimal?       @default(0) @db.Decimal(10, 2)
+  twitch_followers    Int?           @default(0)
+  youtube_subscribers Int?           @default(0)
+  created_at          DateTime?      @default(now()) @db.Timestamp(6)
+  team_players        team_players[]
+}
+
+model team_players {
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  team_id   String?   @db.Uuid
+  player_id String?   @db.Uuid
+  position  String?   @db.VarChar(50)
+  join_date DateTime? @default(dbgenerated("CURRENT_DATE")) @db.Date
+  salary    Decimal?  @db.Decimal(8, 2)
+  is_active Boolean?  @default(true)
+  players   players?  @relation(fields: [player_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  teams     teams?    @relation(fields: [team_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([team_id, player_id])
+  @@index([player_id], map: "idx_team_players_player")
+  @@index([team_id], map: "idx_team_players_team")
+}
+
+model teams {
+  id                               String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                             String         @db.VarChar(100)
+  tag                              String         @unique @db.VarChar(10)
+  country                          String?        @default("FR") @db.VarChar(3)
+  logo_url                         String?        @db.VarChar(255)
+  founded_year                     Int?
+  total_earnings                   Decimal?       @default(0) @db.Decimal(10, 2)
+  created_at                       DateTime?      @default(now()) @db.Timestamp(6)
+  bets                             bets[]
+  match_odds                       match_odds[]
+  matches_matches_team1_idToteams  matches[]      @relation("matches_team1_idToteams")
+  matches_matches_team2_idToteams  matches[]      @relation("matches_team2_idToteams")
+  matches_matches_winner_idToteams matches[]      @relation("matches_winner_idToteams")
+  team_players                     team_players[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tournaments {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name       String    @db.VarChar(150)
+  game_id    String?   @db.Uuid
+  prize_pool Decimal?  @db.Decimal(12, 2)
+  start_date DateTime? @db.Date
+  end_date   DateTime? @db.Date
+  location   String?   @db.VarChar(100)
+  status     String?   @default("upcoming") @db.VarChar(20)
+  matches    matches[]
+  games      games?    @relation(fields: [game_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model users {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  username      String    @unique @db.VarChar(50)
+  email         String    @unique @db.VarChar(100)
+  password_hash String?   @db.VarChar(255)
+  balance       Decimal?  @default(0) @db.Decimal(10, 2)
+  total_bet     Decimal?  @default(0) @db.Decimal(10, 2)
+  total_won     Decimal?  @default(0) @db.Decimal(10, 2)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  bets          bets[]
+}

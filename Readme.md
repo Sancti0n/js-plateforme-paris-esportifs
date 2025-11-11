@@ -45,3 +45,50 @@ La DATABASE_URL a été mise à jour en utilisant la source la plus fiable :
 # Chaîne de connexion fiable (copiée depuis DATABASE_PUBLIC_URL de Railway)
 DATABASE_URL="postgresql://[USER]:[PASSWORD]@maglev.proxy.rlwy.net:52787/railway"
 ```
+
+
+## Jour 2 - Développement des Entités Team, Match, Bet
+
+# Module Team (CRUD Complet)
+
+TDD Cycle,Fonction / Route,Statut du Test,Détails Clés  
+Génération,N/A,N/A,"Création du module, service, contrôleur (nest g)."  
+1 (Lecture),findAll / GET /team, PASS,Valide la récupération de toutes les équipes.  
+2 (Lecture),findOne / GET /team/:id, PASS,Valide la récupération d'une seule équipe par ID.  
+3 (Création),create / POST /team, PASS,Validation de la création d'équipe avec un DTO.  
+4 (Modification),update / PATCH /team/:id, PASS,Valide la mise à jour des champs d'une équipe existante.  
+5 (Suppression),remove / DELETE /team/:id, PASS,Valide la suppression d'une équipe par ID.  
+Bilan,CRUD complet, TERMINÉ,Le module est fonctionnel et prêt.  
+
+
+# Module Match (CRUD Complet)
+
+TDD Cycle,Fonction / Route,Statut du Test,Détails Clés  
+Génération,N/A,N/A,"Création du module, service, contrôleur, DTO."  
+1 (Création),create / POST /match, PASS,Validation de la création d'un match avec les ID d'équipe et les cotes.  
+2 (Lecture),findAll / GET /match, PASS,Récupération de tous les matchs avec les relations (équipes).  
+3 (Lecture),findOne / GET /match/:id, PASS,Récupération d'un match spécifique.  
+4 (Modification),update / PATCH /match/:id, PASS,Mise à jour des détails du match (ex: changement de cotes).  
+5 (Suppression),remove / DELETE /match/:id, PASS,Validation de la suppression d'un match.  
+Bilan,CRUD complet, TERMINÉ,Le module est fonctionnel et prêt.  
+
+
+# Module Bet (Logique Métier Avancée)
+
+TDD Cycle,Fonction / Route,Statut du Test,Détails Clés  
+Génération,N/A,N/A,"Création du module, service, contrôleur, et CreateBetDto."  
+1 (Création),create / POST /bet, PASS,"Le service vérifie le statut du match (SCHEDULED), valide l'équipe pariée, calcule le potentialPayout et enregistre le pari."  
+2 (Lecture),findAllByUser / GET /bet/user/:userId, PASS,"Le contrôleur gère la conversion string-to-number du :userId et le service récupère la liste des paris avec les relations (match, équipe)."  
+3 (Résolution),resolveMatchBets (Service), PASS,"Logique Complexe : La méthode met à jour le statut du Match (FINISHED), récupère les paris, filtre les gagnants, crédite leur balance via prisma.user.update({ data: { balance: { increment: ... } } }), et marque tous les paris du match comme résolus."  
+Bilan,Logique Métier, TERMINÉE,"Le service est complet. L'exposition des routes utilisateur est faite (POST, GET)."  
+
+
+# Prochaine Étape : Module User
+
+Le développement se concentre désormais sur la gestion des utilisateurs pour implémenter l'authentification et finaliser la déduction du solde au moment de la création d'un pari.  
+
+Module à démarrer : User  
+Commandes à exécuter :  
+nest generate module user  
+nest generate service user  
+nest generate controller user  

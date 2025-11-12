@@ -1,54 +1,48 @@
-import { Injectable } from '@nestjs/common';
+// src/team/team.service.ts
+
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
-import { UpdateTeamDto } from './dto/update-team.dto'; // ASSUREZ-VOUS QUE CET IMPORT EST PRÉSENT
+import { UpdateTeamDto } from './dto/update-team.dto';
 
 @Injectable()
 export class TeamService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
-  async create(data: CreateTeamDto) {
-    return this.prisma.team.create({
-      data,
-    });
+  async create(createTeamDto: CreateTeamDto) {
+    return this.prisma.teams.create({ data: createTeamDto });
   }
 
   async findAll() {
-    return this.prisma.team.findMany();
+    return this.prisma.teams.findMany();
   }
 
-  async findOne(id: number) {
-    return this.prisma.team.findUnique({
+  // L'ID est une string (UUID)
+  async findOne(id: string) {
+    const team = await this.prisma.teams.findUnique({
       where: { id },
     });
-  }
-
-  // MÉTHODE UPDATE (PATCH)
-  async update(id: number, data: UpdateTeamDto) {
-    // 1. Vérifier si l'équipe existe pour éviter une erreur Prisma
-    const existingTeam = await this.prisma.team.findUnique({ where: { id } });
-    if (!existingTeam) {
-      return null;
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${id} not found`);
     }
-
-    // 2. Mise à jour de l'équipe
-    return this.prisma.team.update({
-      where: { id },
-      data,
-    });
+    return team;
   }
 
-  // MÉTHODE REMOVE (DELETE)
-  async remove(id: number) {
-    // 1. Vérifier si l'équipe existe (pour retourner null si non trouvée)
-    const existingTeam = await this.prisma.team.findUnique({ where: { id } });
+  // L'ID est une string (UUID)
+  async update(id: string, updateTeamDto: UpdateTeamDto) {
+    const existingTeam = await this.prisma.teams.findUnique({ where: { id } });
     if (!existingTeam) {
-      return null;
+      throw new NotFoundException(`Team with ID ${id} not found`);
     }
+    return this.prisma.teams.update({ where: { id }, data: updateTeamDto as any });
+  }
 
-    // 2. Supprimer l'équipe
-    return this.prisma.team.delete({
-      where: { id },
-    });
+  // L'ID est une string (UUID)
+  async remove(id: string) {
+    const existingTeam = await this.prisma.teams.findUnique({ where: { id } });
+    if (!existingTeam) {
+      throw new NotFoundException(`Team with ID ${id} not found`);
+    }
+    return this.prisma.teams.delete({ where: { id } });
   }
 }

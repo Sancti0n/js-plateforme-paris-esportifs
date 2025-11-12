@@ -1,152 +1,174 @@
+// src/bet/bet.service.ts
+
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { CreateBetDto } from './dto/create-bet.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateBetDto } from './dto/create-bet.dto';
+import { Prisma } from '@prisma/client';
+// Importation de la classe Decimal depuis le paquet sous-jacent.
+import { Decimal } from 'decimal.js';
 
 @Injectable()
 export class BetService {
-    // Injection du PrismaService
-    constructor(private readonly prisma: PrismaService) { }
 
-    // Statuts locaux pour correspondre à la colonne 'status' (String) dans schema.prisma
-    private readonly BetStatus = {
-        PENDING: 'pending',
-        WON: 'won',
-        LOST: 'lost',
-        // Ajoutez d'autres statuts si nécessaire
-    };
+    constructor(private prisma: PrismaService) { }
 
-    async create(createBetDto: CreateBetDto) {
-        const { matchId, teamId, amount, userId, odd } = createBetDto;
+    // Méthode pour placer un nouveau pari
+    async create(createBetDto: CreateBetDto, userId: string) {
+        const { matchId, teamId, amount: amountNum } = createBetDto;
 
-        // 1. Récupérer le match avec les cotes
-        const match = await this.prisma.match.findUnique({
-            where: { id: matchId },
-            select: {
-                id: true,
-                team1Id: true,
-                team2Id: true,
-                status: true,
-                oddsTeam1: true,
-                oddsTeam2: true,
-            },
-        });
+        // UTILISATION : On utilise la classe Decimal installée et importée
+        const amount = new Decimal(amountNum);
 
-        // 2. Vérifier l'existence et le statut du match (doit être SCHEDULED)
-        if (!match || match.status !== 'SCHEDULED') {
-            throw new BadRequestException('Match introuvable ou non disponible pour le pari.');
+        // 1. Récupération des données (Match, Cotes et Utilisateur) dans une transaction
+        const [match, user] = await this.prisma.$transaction([
+            this.prisma.matches.findUnique({
+                where: { id: matchId },
+                include: { match_odds: { where: { team_id: teamId } } },
+            }),
+            this.prisma.users.findUnique({
+                where: { id: userId },
+                select: { id: true, balance: true },
+            }),
+        ]);
+
+        if (!match || match.status !== 'scheduled') {
+            throw new BadRequestException('Match is not available for betting.');
         }
 
-        // 3. Vérifier si l'équipe pariée fait partie du match
-        if (teamId !== match.team1Id && teamId !== match.team2Id) {
-            throw new BadRequestException('L\'équipe pariée n\'est pas une participante de ce match.');
+        if (!user || user.balance === null || user.balance.lessThan(amount)) {
+            // 🔴 CORRECTION DÉFINITIVE : Un seul "throw"
+            throw new BadRequestException('Insufficient balance or user not found.');
         }
 
-        // 4. Calculer le gain potentiel (odd est déjà dans le DTO)
-        const potentialPayout = amount * odd;
-
-        try {
-            // --- Transaction Atomique ---
-            const result = await this.prisma.$transaction([
-                // 1. Déduire le montant du solde de l'utilisateur
-                this.prisma.user.update({
-                    where: { id: userId, balance: { gte: amount } }, // Vérification de solde insuffisant
-                    data: {
-                        balance: { decrement: amount },
-                    },
-                }),
-
-                // 2. Créer le pari
-                this.prisma.bet.create({
-                    data: {
-                        amount: amount,
-                        odds: odd,
-                        potential_payout: potentialPayout,
-                        status: this.BetStatus.PENDING,
-                        match: { connect: { id: matchId } },
-                        team: { connect: { id: teamId } },
-                        user: { connect: { id: userId } },
-                    },
-                }),
-            ]);
-
-            return result[1];
-
-        } catch (e) {
-            throw new BadRequestException('Erreur lors de la création du pari (solde insuffisant ou autre problème).');
+        const teamOdds = match.match_odds[0];
+        if (!teamOdds) {
+            throw new BadRequestException(`Odds not found for team ${teamId} in match ${matchId}.`);
         }
+        const oddsValue = teamOdds.odds;
+        const potentialPayout = amount.mul(oddsValue);
+
+        // 2. Transaction pour créer le pari et mettre à jour le solde
+        const [newBet] = await this.prisma.$transaction([
+            this.prisma.bets.create({
+                data: {
+                    amount,
+                    odds: oddsValue,
+                    potential_payout: potentialPayout,
+                    status: 'pending',
+                    matches: { connect: { id: matchId } },
+                    users: { connect: { id: userId } },
+                    teams: { connect: { id: teamId } },
+                },
+            }),
+            this.prisma.users.update({
+                where: { id: userId },
+                data: {
+                    balance: { decrement: amount },
+                    total_bet: { increment: amount }
+                },
+            }),
+        ]);
+
+        return newBet;
     }
 
-    async resolveMatchBets(matchId: string, winningTeamId: string) {
-        // 1. Mettre à jour le match comme terminé et désigner le vainqueur
-        const updatedMatch = await this.prisma.match.update({
-            where: { id: matchId, status: 'SCHEDULED' },
-            data: {
-                status: 'FINISHED',
-                // CORRECTION: Utiliser 'winnerId' (si cela correspond à votre schema.prisma)
-                winnerId: winningTeamId
-            },
-        });
-
-        if (!updatedMatch) {
-            throw new NotFoundException(`Match ${matchId} non trouvé ou déjà terminé.`);
-        }
-
-        // 2. Récupérer tous les paris non résolus pour ce match
-        const bets = await this.prisma.bet.findMany({
-            where: { matchId: matchId, isResolved: false },
-        });
-
-        // 3. Logique de résolution et de mise à jour du solde
-        const userUpdatePromises = bets
-            .filter(bet => bet.teamId === winningTeamId)
-            .map(bet => {
-                const payout = Number(bet.potential_payout);
-
-                return this.prisma.user.update({
-                    where: { id: bet.userId },
-                    data: {
-                        balance: {
-                            increment: payout,
-                        },
-                    },
-                });
-            });
-
-        await Promise.all(userUpdatePromises);
-
-        // 4. Marquer les paris comme résolus
-        const { count: wonCount } = await this.prisma.bet.updateMany({
-            where: { matchId: matchId, isResolved: false, teamId: winningTeamId },
-            data: { isResolved: true, status: this.BetStatus.WON },
-        });
-
-        const { count: lostCount } = await this.prisma.bet.updateMany({
-            where: {
-                matchId: matchId,
-                isResolved: false,
-                teamId: { not: winningTeamId }
-            },
-            data: {
-                isResolved: true,
-                status: this.BetStatus.LOST
-            },
-        });
-
-        return {
-            message: `Match ${matchId} résolu. ${wonCount + lostCount} paris mis à jour et soldes crédités.`,
-            resolvedBetsCount: wonCount + lostCount,
-        };
-    }
-
-    findAll() {
-        return `This action returns all bet`; // Place-holder
-    }
-
-    // 🟢 AJOUT CRITIQUE POUR LE TEST DU CONTRÔLEUR
+    // Méthode findAllByUser (pour le contrôleur)
     async findAllByUser(userId: string) {
-        return this.prisma.bet.findMany({
-            where: { userId },
+        return this.prisma.bets.findMany({
+            where: { user_id: userId },
+            include: {
+                matches: {
+                    include: {
+                        teams_matches_team1_idToteams: true,
+                        teams_matches_team2_idToteams: true,
+                    }
+                },
+                teams: true,
+            },
             orderBy: { placed_at: 'desc' },
+        });
+    }
+
+    // Méthode pour résoudre les paris après un match
+    async resolveBets(matchId: string, winningTeamId: string | null) {
+
+        await this.prisma.matches.update({
+            where: { id: matchId },
+            data: {
+                status: 'finished',
+                winner_id: winningTeamId,
+            }
+        })
+
+        const pendingBets = await this.prisma.bets.findMany({
+            where: {
+                match_id: matchId,
+                status: 'pending',
+            },
+            select: { id: true, user_id: true, amount: true, team_id: true, potential_payout: true },
+        });
+
+        if (pendingBets.length === 0) {
+            return { message: 'No pending bets to resolve.' };
+        }
+
+        const transaction: Prisma.PrismaPromise<any>[] = [];
+
+        const winningBets = pendingBets.filter(bet => bet.team_id === winningTeamId);
+
+
+        winningBets.forEach(bet => {
+            if (bet.user_id) {
+                // UTILISATION : On utilise la classe Decimal pour les calculs
+                const amount = new Decimal(bet.amount);
+                const potentialPayout = new Decimal(bet.potential_payout);
+
+                transaction.push(this.prisma.users.update({
+                    where: { id: bet.user_id },
+                    data: {
+                        balance: { increment: potentialPayout },
+                        total_won: { increment: potentialPayout.minus(amount) },
+                    },
+                }));
+            }
+        });
+
+        transaction.push(this.prisma.bets.updateMany({
+            where: {
+                match_id: matchId,
+                status: 'pending',
+                team_id: winningTeamId,
+            },
+            data: { status: 'won' },
+        }));
+
+        transaction.push(this.prisma.bets.updateMany({
+            where: {
+                match_id: matchId,
+                status: 'pending',
+                team_id: { not: winningTeamId },
+            },
+            data: { status: 'lost' },
+        }));
+
+        await this.prisma.$transaction(transaction);
+
+        return { resolved: true, winners: winningBets.length, total: pendingBets.length };
+    }
+
+    // Méthode findAll
+    async findAll() {
+        return this.prisma.bets.findMany({
+            include: {
+                users: true,
+                matches: {
+                    include: {
+                        teams_matches_team1_idToteams: true,
+                        teams_matches_team2_idToteams: true,
+                    }
+                },
+                teams: true
+            }
         });
     }
 }

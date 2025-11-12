@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
 // Définition de l'interface pour les données utilisateur non sensibles
-// 🟢 CORRECTION: L'ID est défini comme 'string' pour correspondre au UUID de Prisma
+// L'ID est défini comme 'string' pour correspondre au UUID de Prisma
 export interface UserWithoutPassword {
     id: string;
     email: string;
@@ -30,15 +30,18 @@ export class AuthService {
 
             if (isMatch) {
                 // 3. Destructurer pour omettre le mot de passe haché
-                // Note: user.password_hash est la seule propriété sensible
                 const { password_hash, ...result } = user;
+
+                // CORRECTION TS18047 : Vérifier si balance est non-null 
+                // avant d'appeler .toNumber(), sinon utiliser 0 ou une valeur par défaut.
+                const balanceValue = result.balance ? result.balance.toNumber() : 0;
 
                 // Assurez-vous que les champs requis par UserWithoutPassword sont présents
                 return {
                     id: result.id,
                     email: result.email,
                     username: result.username,
-                    balance: result.balance.toNumber(), // S'assurer que le Decimal de Prisma est traité (si nécessaire)
+                    balance: balanceValue,
                 } as UserWithoutPassword;
             }
         }

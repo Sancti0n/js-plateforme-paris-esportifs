@@ -1,24 +1,37 @@
-import { Controller, Post, Body, Get, Param } from '@nestjs/common';
-import { BetService } from './bet.service';
-import { CreateBetDto } from './dto/create-bet.dto'; // <-- Importez le DTO
+// src/bet/bet.controller.ts
 
-@Controller('bet')
+import { Controller, Post, Body, Req, UseGuards, Get } from '@nestjs/common';
+import { BetService } from './bet.service';
+import { CreateBetDto } from './dto/create-bet.dto';
+import { JwtAuthGuard } from '../auth/jwt.guard';
+
+@Controller('bets')
 export class BetController {
     constructor(private readonly betService: BetService) { }
 
-    // Implémentation de la méthode create (Phase GREEN)
-    @Post() // Mappé sur POST /bet
-    create(@Body() createBetDto: CreateBetDto) {
-        // Le contrôleur appelle la fonction de création dans le service
-        return this.betService.create(createBetDto);
+    @UseGuards(JwtAuthGuard)
+    @Post()
+    async create(@Req() req, @Body() createBetDto: CreateBetDto) {
+        // L'ID utilisateur (userId) est extrait du payload JWT
+        const userId = req.user.userId;
+
+        // Appel de la méthode 'create' du service
+        return this.betService.create(createBetDto, userId);
     }
 
-    // Implémentation de la méthode findAllByUser (Phase GREEN)
-    @Get('user/:userId') // Mappé sur GET /bet/user/:userId
-    findAllByUser(@Param('userId') userId: string) {
-        // Le contrôleur appelle la fonction de lecture dans le service
-        return this.betService.findAllByUser(userId); // Utilisation de +userId pour la conversion en nombre
+    @UseGuards(JwtAuthGuard)
+    @Get('me')
+    // Exemple d'une route pour récupérer les paris de l'utilisateur actuel
+    async findAllByUser(@Req() req) {
+        const userId = req.user.userId;
+        return this.betService.findAllByUser(userId);
     }
 
-    // Les autres méthodes findAll, etc. viendront ici
+    @Get()
+    // Route pour récupérer tous les paris (peut nécessiter un rôle d'Admin/Modérateur)
+    async findAll() {
+        return this.betService.findAll();
+    }
+
+    // Vous pouvez ajouter ici la route de résolution (POST /bets/resolve) si elle est exposée
 }

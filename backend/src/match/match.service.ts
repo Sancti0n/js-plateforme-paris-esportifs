@@ -1,67 +1,58 @@
-import { Injectable } from '@nestjs/common';
+// src/match/match.service.ts
+
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { UpdateMatchDto } from './dto/update-match.dto';
-import { PrismaService } from '../prisma/prisma.service'; // Nécessite l'import de Prisma
 
 @Injectable()
 export class MatchService {
-    // Le constructeur doit injecter Prisma
     constructor(private prisma: PrismaService) { }
 
-    // La méthode 'create' qui a fait passer le test
     async create(createMatchDto: CreateMatchDto) {
-        // Enregistre un nouveau match. Prisma gérera le statut par défaut si non spécifié
-        return this.prisma.match.create({
-            data: createMatchDto,
-        });
+        return this.prisma.matches.create({ data: createMatchDto as any });
     }
 
-    // AJOUT DE LA MÉTHODE findAll POUR PASSER LE TEST (Phase GREEN)
     async findAll() {
-        return this.prisma.match.findMany({
-            // Nous incluons les équipes associées pour rendre les données utiles (Relation 1-N)
+        return this.prisma.matches.findMany({
+            // 🔴 CORRECTION DÉFINITIVE DES NOMS DE RELATIONS
             include: {
-                team1: true,
-                team2: true,
+                teams_matches_team1_idToteams: true,
+                teams_matches_team2_idToteams: true,
+                bets: true
             },
         });
     }
 
-    async findOne(id: number) {
-        // Recherche unique avec l'ID, incluant les équipes comme demandé par le test
-        return this.prisma.match.findUnique({
+    async findOne(id: string) {
+        const match = await this.prisma.matches.findUnique({
             where: { id },
+            // 🔴 CORRECTION DÉFINITIVE DES NOMS DE RELATIONS
             include: {
-                team1: true,
-                team2: true,
+                teams_matches_team1_idToteams: true,
+                teams_matches_team2_idToteams: true,
+                bets: true
             },
         });
+        if (!match) {
+            throw new NotFoundException(`Match with ID ${id} not found`);
+        }
+        return match;
     }
 
-    async update(id: number, data: UpdateMatchDto) {
-        // 1. Vérifier si le match existe
-        const existingMatch = await this.prisma.match.findUnique({ where: { id } });
+    async update(id: string, updateMatchDto: UpdateMatchDto) {
+        const existingMatch = await this.prisma.matches.findUnique({ where: { id } });
         if (!existingMatch) {
-            return null;
+            throw new NotFoundException(`Match with ID ${id} not found`);
         }
-
-        // 2. Mise à jour du match
-        return this.prisma.match.update({
-            where: { id },
-            data,
-        });
+        return this.prisma.matches.update({ where: { id }, data: updateMatchDto as any });
     }
 
-    async remove(id: number) {
-        // 1. Vérifier si le match existe
-        const existingMatch = await this.prisma.match.findUnique({ where: { id } });
+    async remove(id: string) {
+        const existingMatch = await this.prisma.matches.findUnique({ where: { id } });
         if (!existingMatch) {
-            return null;
+            throw new NotFoundException(`Match with ID ${id} not found`);
         }
-
-        // 2. Supprimer le match
-        return this.prisma.match.delete({
-            where: { id },
-        });
+        return this.prisma.matches.delete({ where: { id } });
     }
 }

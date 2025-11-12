@@ -8,7 +8,8 @@ import { ConfigService } from '@nestjs/config';
 // Interface pour le payload minimal (ce qui est encodé dans le JWT)
 export interface JwtPayload {
     email: string;
-    sub: number; // ID de l'utilisateur
+    // 🔴 CORRECTION : L'ID (sub) doit être une STRING (UUID)
+    sub: string;
     iat?: number;
     exp?: number;
 }

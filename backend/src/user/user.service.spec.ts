@@ -160,4 +160,39 @@ describe('UserService (TDD - Gestion Utilisateur)', () => {
     });
   });
 
+  // TEST TDD 4 : Mise à jour d'un utilisateur (pour balance, email, ou autre)
+  it('should update an existing user (e.g., balance or email)', async () => {
+    const userId = 101;
+    const updatePayload = { balance: 500 }; // Changement du solde
+    const updatedUser = {
+      id: userId,
+      email: 'updated@test.com',
+      balance: 500,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // 1. Simuler que la mise à jour réussit
+    prismaServiceMock.user.update.mockResolvedValue(updatedUser);
+
+    // L'appel à 'service.update()' va échouer (méthode inexistante)
+    const result = await service.update(userId, updatePayload);
+
+    // Assertions
+    expect(result).toEqual(updatedUser);
+
+    // S'assurer que prisma.user.update a été appelé correctement
+    expect(prismaServiceMock.user.update).toHaveBeenCalledWith({
+      where: { id: userId },
+      data: updatePayload,
+      select: {
+        id: true,
+        email: true,
+        balance: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  });
+
 });

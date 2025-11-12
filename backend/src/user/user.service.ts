@@ -66,4 +66,21 @@ export class UserService {
             },
         });
     }
+
+    // Implémentation de la méthode update (Phase GREEN)
+    // Nous utilisons 'any' temporairement en attendant UpdateUserDto
+    async update(id: number, updatePayload: any) {
+        return this.prisma.user.update({
+            where: { id },
+            data: updatePayload,
+            select: {
+                id: true,
+                email: true,
+                balance: true,
+                createdAt: true,
+                updatedAt: true,
+                // Le mot de passe est omis
+            },
+        });
+    }
 }

@@ -32,4 +32,22 @@ export class UserService {
 
         return user;
     }
+
+    // Implémentation de la méthode findByEmail (Phase GREEN)
+    async findByEmail(email: string) {
+        // Contrairement à 'create', nous devons explicitement inclure le mot de passe
+        // car l'authentification en a besoin. Par défaut, Prisma ne renvoie pas les champs
+        // marqués @default(false) dans le modèle (comme le password) sans 'select'.
+        return this.prisma.user.findUnique({
+            where: { email },
+            select: {
+                id: true,
+                email: true,
+                password: true, // <-- IMPORTANT : on inclut le mot de passe HACHÉ
+                balance: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+    }
 }

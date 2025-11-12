@@ -92,4 +92,39 @@ describe('UserService (TDD - Gestion Utilisateur)', () => {
       },
     });
   });
+
+  // TEST TDD 2 : Recherche d'un utilisateur par email (pour le login)
+  it('should find a user by email and include the hashed password', async () => {
+    const userWithPassword = {
+      id: 2,
+      email: 'login@test.com',
+      password: 'hashedPassword123', // Le mot de passe HACHÉ est inclus ici
+      balance: 500
+    };
+
+    // 1. Simuler que la recherche trouve l'utilisateur
+    prismaServiceMock.user.findUnique.mockResolvedValue(userWithPassword);
+
+    const emailToFind = 'login@test.com';
+
+    // L'appel à 'service.findByEmail()' va échouer (méthode inexistante)
+    const result = await service.findByEmail(emailToFind);
+
+    // Assertions
+    expect(result).toEqual(userWithPassword);
+
+    // S'assurer que prisma.user.findUnique a été appelé
+    expect(prismaServiceMock.user.findUnique).toHaveBeenCalledWith({
+      where: { email: emailToFind },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        balance: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  });
+
 });

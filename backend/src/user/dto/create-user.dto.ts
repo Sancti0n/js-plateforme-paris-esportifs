@@ -1,14 +1,16 @@
-import { IsString, IsEmail, IsNumber, IsNotEmpty } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, MinLength } from 'class-validator';
 
 export class CreateUserDto {
+    @IsString()
+    @IsNotEmpty()
+    username: string;
+
     @IsEmail()
     @IsNotEmpty()
     email: string;
 
     @IsString()
     @IsNotEmpty()
+    @MinLength(6, { message: 'Le mot de passe doit contenir au moins 6 caractères.' })
     password: string;
-
-    @IsNumber()
-    balance: number = 0; // Solde initial par défaut à zéro
 }

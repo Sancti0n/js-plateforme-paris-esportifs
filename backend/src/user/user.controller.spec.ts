@@ -2,11 +2,42 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
-// Mock du UserService
-const mockUserService = {
-  create: jest.fn(),
-  findOne: jest.fn(),
+// --- Mocks pour les données ---
+// Le résultat attendu après création (contient les champs publics)
+const mockUserResult = {
+  id: 'user-id-1',
+  username: 'testuser',
+  email: 'test@example.com',
+  balance: 0
+};
+
+// Le DTO envoyé au contrôleur (NE CONTIENT PAS 'balance' ni 'id')
+const mockCreateDto: CreateUserDto = {
+  username: 'newuser',
+  email: 'new@example.com',
+  password: 'securepassword',
+};
+
+const mockUpdateDto: UpdateUserDto = {
+  username: 'updatedname',
+};
+
+const usersList = [
+  mockUserResult,
+  { id: 'user-id-2', username: 'user2', email: 'user2@mail.com', balance: 500 }
+];
+
+
+// --- Mock du UserService (Simule les appels à la DB/Prisma) ---
+const userServiceMock = {
+  create: jest.fn().mockResolvedValue(mockUserResult),
+  findAll: jest.fn().mockResolvedValue(usersList),
+  findOne: jest.fn().mockResolvedValue(mockUserResult),
+  update: jest.fn().mockResolvedValue({ ...mockUserResult, ...mockUpdateDto }),
+  remove: jest.fn().mockResolvedValue({ message: 'Supprimé avec succès.' }),
+  // findOneByEmail n'a pas besoin d'être mocké pour le contrôleur
 };
 
 describe('UserController', () => {
@@ -19,58 +50,84 @@ describe('UserController', () => {
       providers: [
         {
           provide: UserService,
-          useValue: mockUserService, // Utilisation du mock
+          useValue: userServiceMock,
         },
       ],
     }).compile();
 
     controller = module.get<UserController>(UserController);
     service = module.get<UserService>(UserService);
-
-    // Nettoyage des mocks avant chaque test
-    mockUserService.create.mockClear();
-    mockUserService.findOne.mockClear();
+    jest.clearAllMocks(); // Réinitialiser les mocks entre les tests
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
 
-  // TEST TDD 1 : POST /user (Création d'utilisateur)
-  it('should call userService.create and return the created user', async () => {
-    const createUserDto: CreateUserDto = {
-      email: 'newuser@test.com',
-      password: 'testPassword',
-      balance: 0,
-    };
-    const expectedResult = { id: 1, ...createUserDto, password: 'hashed', createdAt: new Date() };
+  // --------------------------------------------------------------------------------------
+  // create (POST /user)
+  // --------------------------------------------------------------------------------------
+  describe('create', () => {
+    it('should call userService.create and return the created user (CORRECTED)', async () => {
+      // 🟢 mockCreateDto est conforme au type CreateUserDto (pas de champ 'balance')
+      const result = await controller.create(mockCreateDto);
 
-    // Simuler le résultat du service
-    mockUserService.create.mockResolvedValue(expectedResult);
-
-    // L'appel à 'controller.create()' va échouer (méthode inexistante)
-    const result = await controller.create(createUserDto);
-
-    // Assertions
-    expect(mockUserService.create).toHaveBeenCalledWith(createUserDto);
-    expect(result).toEqual(expectedResult);
+      expect(service.create).toHaveBeenCalledWith(mockCreateDto);
+      expect(result).toEqual(mockUserResult);
+    });
   });
 
-  // TEST TDD 2 : GET /user/:id (Lecture du profil public)
-  it('should call userService.findOne and return the public profile', async () => {
-    const userId = 5;
-    const expectedResult = { id: userId, email: 'public@test.com', balance: 500, createdAt: new Date() };
+  // --------------------------------------------------------------------------------------
+  // findAll (GET /user)
+  // --------------------------------------------------------------------------------------
+  describe('findAll', () => {
+    it('should call userService.findAll and return a list of users', async () => {
+      const result = await controller.findAll();
 
-    // Simuler le résultat du service (sans le mot de passe)
-    mockUserService.findOne.mockResolvedValue(expectedResult);
-
-    // CORRECTION : Passer directement le type NUMBER (userId) à la méthode du contrôleur.
-    // Le test suppose que le pipe a déjà fait son travail.
-    const result = await controller.findOne(userId as any);
-
-    // Assertions
-    expect(mockUserService.findOne).toHaveBeenCalledWith(userId);
-    expect(result).toEqual(expectedResult);
+      expect(service.findAll).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(usersList);
+    });
   });
 
+  // --------------------------------------------------------------------------------------
+  // findOne (GET /user/:id)
+  // --------------------------------------------------------------------------------------
+  describe('findOne', () => {
+    const userId = mockUserResult.id; // Assurez-vous que l'ID est un string (UUID)
+
+    it('should call userService.findOne with the correct ID and return a user', async () => {
+      const result = await controller.findOne(userId);
+
+      expect(service.findOne).toHaveBeenCalledWith(userId);
+      expect(result).toEqual(mockUserResult);
+    });
+  });
+
+  // --------------------------------------------------------------------------------------
+  // update (PATCH /user/:id)
+  // --------------------------------------------------------------------------------------
+  describe('update', () => {
+    const userId = mockUserResult.id;
+
+    it('should call userService.update and return the updated user', async () => {
+      const result = await controller.update(userId, mockUpdateDto);
+
+      expect(service.update).toHaveBeenCalledWith(userId, mockUpdateDto);
+      expect(result.username).toEqual(mockUpdateDto.username);
+    });
+  });
+
+  // --------------------------------------------------------------------------------------
+  // remove (DELETE /user/:id)
+  // --------------------------------------------------------------------------------------
+  describe('remove', () => {
+    const userId = mockUserResult.id;
+
+    it('should call userService.remove with the correct ID', async () => {
+      const result = await controller.remove(userId);
+
+      expect(service.remove).toHaveBeenCalledWith(userId);
+      expect(result).toEqual({ message: 'Supprimé avec succès.' });
+    });
+  });
 });

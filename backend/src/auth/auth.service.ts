@@ -1,60 +1,55 @@
-// src/auth/auth.service.ts
-
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 
-// Interface pour l'utilisateur sans le mot de passe, exportée pour la visibilité
+// Définition de l'interface pour les données utilisateur non sensibles
+// 🟢 CORRECTION: L'ID est défini comme 'string' pour correspondre au UUID de Prisma
 export interface UserWithoutPassword {
-    id: number;
+    id: string;
     email: string;
+    username: string; // Ajouté pour la cohérence
     balance: number;
-    // Ajoutez d'autres champs non sensibles si nécessaire
 }
 
 @Injectable()
 export class AuthService {
     constructor(
-        private readonly userService: UserService,
-        private readonly jwtService: JwtService,
+        private userService: UserService,
+        private jwtService: JwtService,
     ) { }
 
-    /**
-     * Vérifie l'email et le mot de passe de l'utilisateur.
-     * @returns L'objet utilisateur sans le mot de passe, ou null si l'authentification échoue.
-     */
+    // Méthode pour valider les identifiants de l'utilisateur
     async validateUser(email: string, pass: string): Promise<UserWithoutPassword | null> {
-        // 1. Chercher l'utilisateur, en incluant le mot de passe haché
-        const user = await this.userService.findByEmail(email);
+        // 1. Chercher l'utilisateur par email (cette méthode retourne le hash)
+        const user = await this.userService.findOneByEmail(email);
 
-        if (!user || !user.password) {
-            return null;
+        if (user) {
+            // 2. Comparer le mot de passe en clair avec le hash
+            const isMatch = await bcrypt.compare(pass, user.password_hash);
+
+            if (isMatch) {
+                // 3. Destructurer pour omettre le mot de passe haché
+                // Note: user.password_hash est la seule propriété sensible
+                const { password_hash, ...result } = user;
+
+                // Assurez-vous que les champs requis par UserWithoutPassword sont présents
+                return {
+                    id: result.id,
+                    email: result.email,
+                    username: result.username,
+                    balance: result.balance.toNumber(), // S'assurer que le Decimal de Prisma est traité (si nécessaire)
+                } as UserWithoutPassword;
+            }
         }
-
-        // 2. Comparer le mot de passe fourni avec le mot de passe haché en base
-        const isPasswordValid = await bcrypt.compare(pass, user.password);
-
-        if (isPasswordValid) {
-            // 3. Omettre le mot de passe avant de retourner l'objet utilisateur
-            const { password, ...result } = user;
-            return result;
-        }
-
-        // Si le mot de passe est invalide
         return null;
     }
 
-    /**
-     * Génère le jeton JWT pour un utilisateur validé.
-     * @param user L'objet utilisateur validé (sans mot de passe).
-     * @returns Un objet contenant les informations utilisateur et le jeton d'accès.
-     */
+    // Méthode pour générer le token JWT
     async login(user: UserWithoutPassword) {
-        // 1. Créer le payload JWT
+        // Payload du token: 'sub' (subject) est une convention JWT pour l'ID utilisateur
         const payload = { email: user.email, sub: user.id };
 
-        // 2. Retourner les données utilisateur et le jeton
         return {
             user: user,
             access_token: this.jwtService.sign(payload),

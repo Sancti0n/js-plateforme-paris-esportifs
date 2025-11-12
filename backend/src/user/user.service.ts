@@ -1,86 +1,125 @@
-import { Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
+import {
+    ConflictException,
+    Injectable,
+    NotFoundException
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as bcrypt from 'bcryptjs';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import * as bcrypt from 'bcrypt';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+
+// Le type pour s'assurer que l'objet retourné n'a pas le hash ni les timestamps
+export type UserWithoutPassword = { // Exporté pour les autres modules (comme AuthService)
+    id: string;
+    username: string;
+    email: string;
+    balance: number;
+};
 
 @Injectable()
 export class UserService {
-    // Injecter PrismaService
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(private prisma: PrismaService) { }
 
-    // Implémentation de la méthode create (Phase GREEN)
+    // Conversion de l'utilisateur Prisma en objet sans mot de passe haché ni métadonnées
+    private mapUserWithoutPassword(user: any): UserWithoutPassword {
+        // 🟢 CORRECTION : Omettre explicitement password_hash ET les timestamps de Prisma
+        const { password_hash, created_at, updated_at, ...result } = user;
+
+        return {
+            ...result,
+            // S'assurer que 'balance' est un number pour les tests/contrôleurs
+            balance: result.balance ? result.balance.toNumber() : 0,
+        } as UserWithoutPassword;
+    }
+
+    // --------------------------------------------------------------------------------------
+    // CREATE
+    // --------------------------------------------------------------------------------------
     async create(createUserDto: CreateUserDto) {
-        // 1. Crypter le mot de passe
+        // 1. Hashage du mot de passe
         const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
-        // 2. Créer l'utilisateur dans la base de données
-        const user = await this.prisma.user.create({
-            data: {
-                ...createUserDto,
-                password: hashedPassword, // Utiliser le mot de passe crypté
-                balance: createUserDto.balance ?? 0, // Assurer un solde par défaut si non fourni
-            },
-            // Ne pas renvoyer le mot de passe haché dans le résultat final par sécurité
-            select: {
-                id: true,
-                email: true,
-                balance: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
+        try {
+            // 2. Création de l'utilisateur dans la base de données
+            const user = await this.prisma.users.create({
+                data: {
+                    username: createUserDto.username,
+                    email: createUserDto.email,
+                    password_hash: hashedPassword,
+                },
+            });
 
-        return user;
+            // 3. Retourner l'objet utilisateur sans le hash ni les timestamps
+            return this.mapUserWithoutPassword(user);
+        } catch (error) {
+            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+                throw new ConflictException("Le nom d'utilisateur est déjà pris.");
+            }
+            throw error;
+        }
     }
 
-    // Implémentation de la méthode findByEmail (Phase GREEN)
-    async findByEmail(email: string) {
-        // Contrairement à 'create', nous devons explicitement inclure le mot de passe
-        // car l'authentification en a besoin. Par défaut, Prisma ne renvoie pas les champs
-        // marqués @default(false) dans le modèle (comme le password) sans 'select'.
-        return this.prisma.user.findUnique({
-            where: { email },
-            select: {
-                id: true,
-                email: true,
-                password: true, // <-- IMPORTANT : on inclut le mot de passe HACHÉ
-                balance: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
+    // --------------------------------------------------------------------------------------
+    // FIND ALL
+    // --------------------------------------------------------------------------------------
+    async findAll() {
+        const users = await this.prisma.users.findMany();
+        // Retourner la liste sans les mots de passe ni les timestamps
+        return users.map(user => this.mapUserWithoutPassword(user));
     }
 
-    async findOne(id: number) {
-        return this.prisma.user.findUnique({
-            where: { id },
-            select: {
-                id: true,
-                email: true,
-                balance: true,
-                createdAt: true,
-                updatedAt: true,
-                // Le mot de passe est explicitement omis pour la sécurité (sélection par défaut de Prisma)
-                // ou en utilisant 'password: false' si le modèle est configuré pour l'inclure par défaut.
-                // Ici, nous nous assurons que seuls les champs publics sont sélectionnés.
-            },
-        });
+    // --------------------------------------------------------------------------------------
+    // FIND ONE / FIND ONE BY EMAIL
+    // --------------------------------------------------------------------------------------
+    async findOne(id: string) {
+        const user = await this.prisma.users.findUnique({ where: { id } });
+        if (!user) {
+            throw new NotFoundException(`Utilisateur avec l'ID ${id} non trouvé.`);
+        }
+        // Retourner sans le mot de passe haché ni les timestamps
+        return this.mapUserWithoutPassword(user);
     }
 
-    // Implémentation de la méthode update (Phase GREEN)
-    // Nous utilisons 'any' temporairement en attendant UpdateUserDto
-    async update(id: number, updatePayload: any) {
-        return this.prisma.user.update({
-            where: { id },
-            data: updatePayload,
-            select: {
-                id: true,
-                email: true,
-                balance: true,
-                createdAt: true,
-                updatedAt: true,
-                // Le mot de passe est omis
-            },
-        });
+    // Utilisé par AuthService.validateUser, doit retourner l'utilisateur AVEC le hash
+    async findOneByEmail(email: string) {
+        return this.prisma.users.findUnique({ where: { email } });
+    }
+
+    // --------------------------------------------------------------------------------------
+    // UPDATE
+    // --------------------------------------------------------------------------------------
+    async update(id: string, updateUserDto: UpdateUserDto) {
+        try {
+            const user = await this.prisma.users.update({
+                where: { id },
+                data: updateUserDto,
+            });
+
+            return this.mapUserWithoutPassword(user);
+        } catch (error) {
+            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2025') {
+                throw new NotFoundException(`Utilisateur avec l'ID ${id} non trouvé.`);
+            }
+            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+                throw new ConflictException("Le nom d'utilisateur ou l'email est déjà pris.");
+            }
+            throw error;
+        }
+    }
+
+    // --------------------------------------------------------------------------------------
+    // REMOVE
+    // --------------------------------------------------------------------------------------
+    async remove(id: string) {
+        try {
+            await this.prisma.users.delete({ where: { id } });
+            return { message: `Utilisateur avec l'ID ${id} supprimé avec succès.` };
+        } catch (error) {
+            if (error instanceof PrismaClientKnownRequestError && error.code === 'P2025') {
+                throw new NotFoundException(`Utilisateur avec l'ID ${id} non trouvé.`);
+            }
+            throw error;
+        }
     }
 }

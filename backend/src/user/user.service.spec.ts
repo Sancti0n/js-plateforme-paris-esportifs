@@ -1,198 +1,280 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UserService } from './user.service';
+import { UserService } from '../user/user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import * as bcrypt from 'bcryptjs';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
-// MOCK GLOBAL DU SERVICE PRISMA
+
+// --- Mocks des Dépendances ---
+
+// MOCK GLOBAL DE BCRYPT
+jest.mock('bcrypt', () => ({
+  hash: jest.fn(), // On mocke la fonction hash
+}));
+
+// 🟢 CORRECTION CRITIQUE : Le mock de PrismaService doit contenir la propriété 'users'
 const prismaServiceMock = {
-  user: {
+  users: {
     create: jest.fn(),
     findUnique: jest.fn(),
     findMany: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
   },
+  // Mock pour la transaction (si utilisée)
+  $transaction: jest.fn((callback) => callback(prismaServiceMock)),
 };
 
-// MOCK GLOBAL DE BCRYPT
-jest.mock('bcryptjs', () => ({
-  hash: jest.fn().mockResolvedValue('hashedPassword123'),
-  compare: jest.fn(),
-}));
+// --- Données de Test ---
 
-describe('UserService (TDD - Gestion Utilisateur)', () => {
+const mockCreateUserDto: CreateUserDto = {
+  username: 'testuser',
+  email: 'test@example.com',
+  password: 'password123',
+};
+
+// Utilisateur retourné par Prisma (simulant l'objet retourné)
+const mockUser = {
+  id: 'uuid-12345',
+  username: mockCreateUserDto.username,
+  email: mockCreateUserDto.email,
+  password_hash: 'hashedPassword123',
+  balance: { toNumber: () => 100 }, // Simule le type Decimal de Prisma
+  created_at: new Date(),
+  updated_at: new Date(),
+};
+
+// Utilisateur sans mot de passe (format retourné par le service)
+const mockUserWithoutPassword = {
+  id: mockUser.id,
+  username: mockUser.username,
+  email: mockUser.email,
+  balance: 100, // Format number après conversion
+};
+
+
+describe('UserService', () => {
   let service: UserService;
-  // let prisma: PrismaService;
+  let prisma: PrismaService;
 
   beforeEach(async () => {
-    // Réinitialisation des mocks entre chaque test
-    Object.values(prismaServiceMock.user).forEach(mockFn => mockFn.mockClear());
-    (bcrypt.hash as jest.Mock).mockClear();
+    // Nettoyer les mocks avant chaque test
+    jest.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
         {
           provide: PrismaService,
-          useValue: prismaServiceMock,
+          useValue: prismaServiceMock, // Injection du mock
         },
       ],
     }).compile();
 
     service = module.get<UserService>(UserService);
-    // prisma = module.get<PrismaService>(PrismaService); // Utile si l'on voulait tester directement prisma
+    prisma = module.get<PrismaService>(PrismaService);
+
+    // Setup par défaut pour les tests réussis
+    (bcrypt.hash as jest.Mock).mockResolvedValue(mockUser.password_hash);
+    prismaServiceMock.users.create.mockResolvedValue(mockUser);
+    prismaServiceMock.users.findUnique.mockResolvedValue(mockUser);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  // TEST TDD 1 : Création d'un utilisateur avec cryptage du mot de passe
-  it('should hash the password and successfully create a new user', async () => {
-    const createUserDto: CreateUserDto = {
-      email: 'test@example.com',
-      password: 'plainPassword',
-      balance: 1000,
-    };
+  // --------------------------------------------------------------------------------------
+  // CREATE
+  // --------------------------------------------------------------------------------------
+  describe('create', () => {
+    it('should call bcrypt.hash, create user with hashed password, and return the user (GREEN)', async () => {
+      // Setup
+      const expectedUserData = {
+        username: mockCreateUserDto.username,
+        email: mockCreateUserDto.email,
+        password_hash: mockUser.password_hash,
+      };
 
-    const expectedResult = {
-      id: 1,
-      email: createUserDto.email,
-      password: 'hashedPassword123', // Le mot de passe haché mocké
-      balance: 1000
-    };
+      // Execute
+      const result = await service.create(mockCreateUserDto);
 
-    // 1. Simuler que la création réussit
-    prismaServiceMock.user.create.mockResolvedValue(expectedResult);
+      // Assertions
+      expect(bcrypt.hash).toHaveBeenCalledWith(mockCreateUserDto.password, 10);
+      expect(prismaServiceMock.users.create).toHaveBeenCalledWith({ data: expectedUserData });
+      expect(result).toEqual(mockUserWithoutPassword);
+    });
 
-    // L'appel à 'service.create()' va échouer (méthode inexistante)
-    const result = await service.create(createUserDto);
+    it('should throw ConflictException if user email already exists (simulated by findUnique)', async () => {
+      // Simuler que l'utilisateur existe déjà lors de la recherche (bien que ce test ne soit plus nécessaire si le P2002 est géré)
+      // Laissez ce test pour la couverture.
+      prismaServiceMock.users.findUnique.mockResolvedValue(mockUser);
 
-    // Assertions
-    expect(result).toEqual(expectedResult);
+      // Execute & Assert
+      // Ici, on attend le ConflictException levé par la logique du service qui gère l'email/username déjà pris (P2002)
+      // Pour ce mock, nous allons simuler directement l'erreur P2002
+      const error = new PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['email'] }
+      });
+      prismaServiceMock.users.create.mockRejectedValue(error);
 
-    // S'assurer que bcrypt.hash a été appelé avec le mot de passe clair
-    expect(bcrypt.hash).toHaveBeenCalledWith(createUserDto.password, 10);
+      await expect(service.create(mockCreateUserDto as any)).rejects.toThrow(ConflictException);
+      await expect(service.create(mockCreateUserDto as any)).rejects.toThrow("Le nom d'utilisateur est déjà pris.");
+    });
 
-    // S'assurer que prisma.user.create a été appelé avec le mot de passe HACHÉ
-    expect(prismaServiceMock.user.create).toHaveBeenCalledWith({
-      data: {
-        email: createUserDto.email,
-        password: 'hashedPassword123', // Doit être le mot de passe haché
-        balance: createUserDto.balance,
-      },
-      // AJOUTER LE BLOC 'select' POUR MATCHÉ L'APPEL DU SERVICE
-      select: {
-        id: true,
-        email: true,
-        balance: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    it('should throw ConflictException if username is already taken (P2002)', async () => {
+      // Setup : Simuler l'échec du .create (où l'erreur P2002 est gérée dans le service)
+      const error = new PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['username'] }
+      });
+      prismaServiceMock.users.create.mockRejectedValue(error);
+
+      // Execute & Assert
+      await expect(service.create(mockCreateUserDto as any)).rejects.toThrow(ConflictException);
+      await expect(service.create(mockCreateUserDto as any)).rejects.toThrow("Le nom d'utilisateur est déjà pris.");
     });
   });
 
-  // TEST TDD 2 : Recherche d'un utilisateur par email (pour le login)
-  it('should find a user by email and include the hashed password', async () => {
-    const userWithPassword = {
-      id: 2,
-      email: 'login@test.com',
-      password: 'hashedPassword123', // Le mot de passe HACHÉ est inclus ici
-      balance: 500
-    };
+  // --------------------------------------------------------------------------------------
+  // FIND ONE BY EMAIL
+  // --------------------------------------------------------------------------------------
+  describe('findOneByEmail', () => {
+    it('should return a user if found by email (includes hash)', async () => {
+      // Setup : findUnique retourne l'utilisateur AVEC le hash
+      prismaServiceMock.users.findUnique.mockResolvedValue(mockUser);
 
-    // 1. Simuler que la recherche trouve l'utilisateur
-    prismaServiceMock.user.findUnique.mockResolvedValue(userWithPassword);
+      // Execute
+      const result = await service.findOneByEmail(mockCreateUserDto.email);
 
-    const emailToFind = 'login@test.com';
+      // Assertions
+      expect(prismaServiceMock.users.findUnique).toHaveBeenCalledWith({ where: { email: mockCreateUserDto.email } });
+      // Le service findOneByEmail doit retourner l'objet mocké brut (AVEC le hash et le Decimal)
+      expect(result).toEqual(mockUser);
+    });
 
-    // L'appel à 'service.findByEmail()' va échouer (méthode inexistante)
-    const result = await service.findByEmail(emailToFind);
+    it('should return null if user not found', async () => {
+      // Setup
+      prismaServiceMock.users.findUnique.mockResolvedValue(null);
 
-    // Assertions
-    expect(result).toEqual(userWithPassword);
+      // Execute
+      const result = await service.findOneByEmail('non-existent@email.com');
 
-    // S'assurer que prisma.user.findUnique a été appelé
-    expect(prismaServiceMock.user.findUnique).toHaveBeenCalledWith({
-      where: { email: emailToFind },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        balance: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      // Assertions
+      expect(result).toBeNull();
     });
   });
 
-  // TEST TDD 3 : Recherche d'un utilisateur par ID (Profil public)
-  it('should find a user by ID and omit the password field', async () => {
-    const userId = 99;
-    const userWithoutPassword = {
-      id: userId,
-      email: 'profile@test.com',
-      balance: 1200,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  // --------------------------------------------------------------------------------------
+  // FIND ONE
+  // --------------------------------------------------------------------------------------
+  describe('findOne', () => {
+    it('should return a user if found by id', async () => {
+      // Setup
+      prismaServiceMock.users.findUnique.mockResolvedValue(mockUser);
 
-    // 1. Simuler que la recherche trouve l'utilisateur
-    prismaServiceMock.user.findUnique.mockResolvedValue(userWithoutPassword);
+      // Execute
+      const result = await service.findOne(mockUser.id);
 
-    // L'appel à 'service.findOne()' va échouer (méthode inexistante)
-    const result = await service.findOne(userId);
+      // Assertions
+      expect(prismaServiceMock.users.findUnique).toHaveBeenCalledWith({ where: { id: mockUser.id } });
+      expect(result).toEqual(mockUserWithoutPassword); // Sans hash
+    });
 
-    // Assertions
-    expect(result).toEqual(userWithoutPassword);
+    it('should throw NotFoundException if user not found', async () => {
+      // Setup
+      prismaServiceMock.users.findUnique.mockResolvedValue(null);
 
-    // S'assurer que prisma.user.findUnique a été appelé avec un bloc 'select' sécurisé
-    expect(prismaServiceMock.user.findUnique).toHaveBeenCalledWith({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        balance: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      // Execute & Assert
+      await expect(service.findOne('non-existent-id')).rejects.toThrow(NotFoundException);
     });
   });
 
-  // TEST TDD 4 : Mise à jour d'un utilisateur (pour balance, email, ou autre)
-  it('should update an existing user (e.g., balance or email)', async () => {
-    const userId = 101;
-    const updatePayload = { balance: 500 }; // Changement du solde
-    const updatedUser = {
-      id: userId,
-      email: 'updated@test.com',
-      balance: 500,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  // --------------------------------------------------------------------------------------
+  // FIND ALL
+  // --------------------------------------------------------------------------------------
+  describe('findAll', () => {
+    it('should return an array of users', async () => {
+      // Setup
+      const mockUsersArray = [mockUser, mockUser];
+      prismaServiceMock.users.findMany.mockResolvedValue(mockUsersArray);
 
-    // 1. Simuler que la mise à jour réussit
-    prismaServiceMock.user.update.mockResolvedValue(updatedUser);
+      // Execute
+      const result = await service.findAll();
 
-    // L'appel à 'service.update()' va échouer (méthode inexistante)
-    const result = await service.update(userId, updatePayload);
-
-    // Assertions
-    expect(result).toEqual(updatedUser);
-
-    // S'assurer que prisma.user.update a été appelé correctement
-    expect(prismaServiceMock.user.update).toHaveBeenCalledWith({
-      where: { id: userId },
-      data: updatePayload,
-      select: {
-        id: true,
-        email: true,
-        balance: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      // Assertions
+      expect(prismaServiceMock.users.findMany).toHaveBeenCalled();
+      expect(result).toEqual([mockUserWithoutPassword, mockUserWithoutPassword]);
     });
   });
 
+  // --------------------------------------------------------------------------------------
+  // UPDATE
+  // --------------------------------------------------------------------------------------
+  describe('update', () => {
+    const updateDto: UpdateUserDto = { username: 'newname' };
+    const updatedUser = { ...mockUser, username: 'newname' };
+
+    it('should update the user and return the result without hash', async () => {
+      // Setup
+      prismaServiceMock.users.update.mockResolvedValue(updatedUser);
+
+      // Execute
+      const result = await service.update(mockUser.id, updateDto);
+
+      // Assertions
+      expect(prismaServiceMock.users.update).toHaveBeenCalledWith({
+        where: { id: mockUser.id },
+        data: updateDto,
+      });
+      expect(result.username).toBe('newname');
+    });
+
+    it('should throw NotFoundException if user to update is not found (P2025)', async () => {
+      // Setup
+      const error = new PrismaClientKnownRequestError('Record to update not found', {
+        code: 'P2025',
+        clientVersion: 'test'
+      });
+      prismaServiceMock.users.update.mockRejectedValue(error);
+
+      // Execute & Assert
+      await expect(service.update(mockUser.id, updateDto)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // --------------------------------------------------------------------------------------
+  // REMOVE
+  // --------------------------------------------------------------------------------------
+  describe('remove', () => {
+    it('should delete the user', async () => {
+      // Setup: delete ne retourne rien par défaut
+      prismaServiceMock.users.delete.mockResolvedValue(mockUser);
+
+      // Execute
+      const result = await service.remove(mockUser.id);
+
+      // Assertions
+      expect(prismaServiceMock.users.delete).toHaveBeenCalledWith({ where: { id: mockUser.id } });
+      expect(result).toEqual({ message: `Utilisateur avec l'ID ${mockUser.id} supprimé avec succès.` });
+    });
+
+    it('should throw NotFoundException if user to delete is not found (P2025)', async () => {
+      // Setup
+      const error = new PrismaClientKnownRequestError('Record to delete not found', {
+        code: 'P2025',
+        clientVersion: 'test'
+      });
+      prismaServiceMock.users.delete.mockRejectedValue(error);
+
+      // Execute & Assert
+      await expect(service.remove(mockUser.id)).rejects.toThrow(NotFoundException);
+    });
+  });
 });

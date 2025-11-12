@@ -83,12 +83,10 @@ Génération,N/A,N/A,"Création du module, service, contrôleur, et CreateBetDto
 Bilan,Logique Métier, TERMINÉE,"Le service est complet. L'exposition des routes utilisateur est faite (POST, GET)."  
 
 
-# Prochaine Étape : Module User
+# Module User et Auth (Finalisation)
 
-Le développement se concentre désormais sur la gestion des utilisateurs pour implémenter l'authentification et finaliser la déduction du solde au moment de la création d'un pari.  
-
-Module à démarrer : User  
-Commandes à exécuter :  
-nest generate module user  
-nest generate service user  
-nest generate controller user  
+TDD Cycle,Fonction / Route,Statut du Test,Détails Clés
+Génération,N/A,N/A,Création des modules User et Auth.
+1 (User),CRUD User,PASS,"CRUD de base de l'utilisateur (Lecture, Création, Modification, Suppression)."
+2 (Auth),Implémentation JWT,N/A,Implémentation du mécanisme d'authentification par JWT pour sécuriser les routes.
+Bilan,Stabilité Globale,TERMINÉE,Tous les tests unitaires et les dépendances du service de pari sont maintenant au vert (PASS).

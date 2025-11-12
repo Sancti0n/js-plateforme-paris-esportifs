@@ -127,4 +127,37 @@ describe('UserService (TDD - Gestion Utilisateur)', () => {
     });
   });
 
+  // TEST TDD 3 : Recherche d'un utilisateur par ID (Profil public)
+  it('should find a user by ID and omit the password field', async () => {
+    const userId = 99;
+    const userWithoutPassword = {
+      id: userId,
+      email: 'profile@test.com',
+      balance: 1200,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // 1. Simuler que la recherche trouve l'utilisateur
+    prismaServiceMock.user.findUnique.mockResolvedValue(userWithoutPassword);
+
+    // L'appel à 'service.findOne()' va échouer (méthode inexistante)
+    const result = await service.findOne(userId);
+
+    // Assertions
+    expect(result).toEqual(userWithoutPassword);
+
+    // S'assurer que prisma.user.findUnique a été appelé avec un bloc 'select' sécurisé
+    expect(prismaServiceMock.user.findUnique).toHaveBeenCalledWith({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        balance: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  });
+
 });

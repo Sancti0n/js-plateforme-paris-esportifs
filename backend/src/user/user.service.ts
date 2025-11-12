@@ -50,4 +50,20 @@ export class UserService {
             },
         });
     }
+
+    async findOne(id: number) {
+        return this.prisma.user.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                email: true,
+                balance: true,
+                createdAt: true,
+                updatedAt: true,
+                // Le mot de passe est explicitement omis pour la sécurité (sélection par défaut de Prisma)
+                // ou en utilisant 'password: false' si le modèle est configuré pour l'inclure par défaut.
+                // Ici, nous nous assurons que seuls les champs publics sont sélectionnés.
+            },
+        });
+    }
 }

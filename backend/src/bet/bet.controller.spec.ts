@@ -40,10 +40,11 @@ describe('BetController', () => {
   // TEST TDD 1 : Teste la route POST /bet (Création)
   it('should call betService.create and return the created bet', async () => {
     const createBetDto: CreateBetDto = {
-      matchId: 1,
-      winningTeamId: 10,
+      matchId: 'match-1',
+      teamId: 'team-10',
+      userId: 'user-1',
       amount: 100,
-      userId: 1,
+      odd: 2.0,
     };
     const createdBet = { id: 1, ...createBetDto, isResolved: false };
 
@@ -61,7 +62,7 @@ describe('BetController', () => {
 
   // TEST TDD 2 : Teste la route GET /bet/user/:userId (Lecture par utilisateur)
   it('should call betService.findAllByUser with the correct ID and return a list of bets', async () => {
-    const userId = 42;
+    const userId = '42';
     const betsList = [
       { id: 1, matchId: 10, userId: userId, amount: 50 },
     ];

@@ -17,7 +17,7 @@ export class BetController {
     @Get('user/:userId') // Mappé sur GET /bet/user/:userId
     findAllByUser(@Param('userId') userId: string) {
         // Le contrôleur appelle la fonction de lecture dans le service
-        return this.betService.findAllByUser(+userId); // Utilisation de +userId pour la conversion en nombre
+        return this.betService.findAllByUser(userId); // Utilisation de +userId pour la conversion en nombre
     }
 
     // Les autres méthodes findAll, etc. viendront ici

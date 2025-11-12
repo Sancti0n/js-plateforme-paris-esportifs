@@ -1,14 +1,30 @@
+// src/bet/dto/create-bet.dto.ts
+
+import { IsUUID, IsNumber, IsNotEmpty, Min, IsString } from 'class-validator';
+
 export class CreateBetDto {
-    // ID du match sur lequel l'utilisateur parie
-    matchId: number;
+    @IsUUID()
+    @IsNotEmpty()
+    // Correction 1 : Changer number en string pour les UUID
+    readonly matchId: string;
 
-    // ID de l'équipe que l'utilisateur parie comme gagnante
-    winningTeamId: number;
+    @IsUUID()
+    @IsNotEmpty()
+    // Correction 2 : Changer number en string pour les UUID (Ceci est la ligne qui provoque l'erreur)
+    readonly teamId: string;
 
-    // Montant de la mise (nombre décimal)
-    amount: number;
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(1)
+    @IsNotEmpty()
+    readonly amount: number;
 
-    // Nous utiliserons 1 comme userId par défaut pour le TDD initial
-    // L'authentification gérera le vrai userId plus tard.
-    userId: number = 1;
+    // Assurez-vous que userId est également un UUID (string)
+    @IsUUID()
+    @IsNotEmpty()
+    readonly userId: string;
+
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(1.01)
+    @IsNotEmpty()
+    readonly odd: number;
 }

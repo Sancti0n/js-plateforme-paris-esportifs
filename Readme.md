@@ -83,10 +83,23 @@ Génération,N/A,N/A,"Création du module, service, contrôleur, et CreateBetDto
 Bilan,Logique Métier, TERMINÉE,"Le service est complet. L'exposition des routes utilisateur est faite (POST, GET)."  
 
 
-# Module User et Auth (Finalisation)
+# Module User
 
 TDD Cycle,Fonction / Route,Statut du Test,Détails Clés
-Génération,N/A,N/A,Création des modules User et Auth.
-1 (User),CRUD User,PASS,"CRUD de base de l'utilisateur (Lecture, Création, Modification, Suppression)."
-2 (Auth),Implémentation JWT,N/A,Implémentation du mécanisme d'authentification par JWT pour sécuriser les routes.
-Bilan,Stabilité Globale,TERMINÉE,Tous les tests unitaires et les dépendances du service de pari sont maintenant au vert (PASS).
+Génération,N/A,N/A,"Création du module, service, contrôleur, DTOs."  
+1 (CRUD),create / POST /user, PASS,"Le service gère le hashage du mot de passe et l'interception de l'erreur **P2002** (conflit d'unicité email/username)."
+2 (Lecture),findOne / GET /user/:id, PASS,"Le service omet le hash du mot de passe et gère **P2025** (non trouvé)."
+3 (Mise à jour),update / PATCH /user/:id, PASS,"Gère le *NotFoundException* et le *ConflictException*."
+4 (Suppression),remove / DELETE /user/:id, PASS,"Gère le *NotFoundException*."
+Bilan,CRUD Complet et Sécurité, TERMINÉ,"Le service est stable, les DTOs sont validés et les tests gèrent les mocks Prisma complexes."
+
+---
+
+# Module Auth
+
+TDD Cycle,Fonction / Route,Statut du Test,Détails Clés  
+Génération,N/A,N/A,"Création du module Auth avec UserService et JwtService injectés."  
+1 (Validation),validateUser (Service), PASS,"Vérifie l'existence de l'utilisateur par email et compare le hash du mot de passe."  
+2 (JWT),login (Service), PASS,"Génère le JWT avec l'ID utilisateur comme payload (`sub`)."
+3 (Route),login / POST /auth/login, PASS,"Le contrôleur utilise la *LocalStrategy* pour valider l'utilisateur et retourner le JWT."
+Bilan,Authentification, TERMINÉE,"Le service d'authentification est complet. Prochaine étape : Implémentation des Guards JWT."

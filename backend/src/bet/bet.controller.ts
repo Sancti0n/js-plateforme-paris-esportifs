@@ -1,28 +1,28 @@
 // src/bet/bet.controller.ts
 
-import { Controller, Post, Body, Req, UseGuards, Get } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Request } from '@nestjs/common';
 import { BetService } from './bet.service';
 import { CreateBetDto } from './dto/create-bet.dto';
-import { JwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('bets')
 export class BetController {
     constructor(private readonly betService: BetService) { }
 
+    // APPLICATION DU GUARD
     @UseGuards(JwtAuthGuard)
     @Post()
-    async create(@Req() req, @Body() createBetDto: CreateBetDto) {
-        // L'ID utilisateur (userId) est extrait du payload JWT
+    // L'objet @Request nous permet d'accéder aux données utilisateur attachées par le Guard
+    create(@Body() createBetDto: CreateBetDto, @Request() req) {
+        // req.user contient { userId: 'uuid', email: '...', ... }
         const userId = req.user.userId;
-
-        // Appel de la méthode 'create' du service
         return this.betService.create(createBetDto, userId);
     }
 
+    // APPLICATION DU GUARD
     @UseGuards(JwtAuthGuard)
     @Get('me')
-    // Exemple d'une route pour récupérer les paris de l'utilisateur actuel
-    async findAllByUser(@Req() req) {
+    findAllByUser(@Request() req) {
         const userId = req.user.userId;
         return this.betService.findAllByUser(userId);
     }
@@ -33,5 +33,4 @@ export class BetController {
         return this.betService.findAll();
     }
 
-    // Vous pouvez ajouter ici la route de résolution (POST /bets/resolve) si elle est exposée
 }

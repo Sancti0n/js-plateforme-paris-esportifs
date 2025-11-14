@@ -1,4 +1,4 @@
-// tsconfig.json (Version recommandée)
+// tsconfig.json (Version Corrigée)
 {
   "compilerOptions": {
     "module": "commonjs",
@@ -8,7 +8,7 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2021", // Une cible plus courante que ES2023 pour la compatibilité
+    "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
@@ -18,10 +18,19 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "types": [
+      "node"
+    ]
   },
+  // AJOUT CRITIQUE : Dit à TypeScript de compiler tous les fichiers dans le dossier 'src'
+  "include": [
+    "src/**/*"
+  ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "**/*.spec.ts",
+    "**/*.e2e-spec.ts"
   ]
 }

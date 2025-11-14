@@ -1,22 +1,21 @@
 // src/auth/auth.controller.ts
 
-import { Controller, Post, Request, UseGuards } from '@nestjs/common';
+import { Controller, Post, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
-// L'importation de LocalAuthGuard échouera si nous ne le créons pas, nous utilisons le nom de classe directement
-import { AuthGuard } from '@nestjs/passport';
-// NOTE: Dans une vraie application, on créerait un fichier 'local-auth.guard.ts' pour étendre AuthGuard('local')
+// Import du Guard de stratégie locale pour la connexion (vérifie email/password)
+import { LocalAuthGuard } from './local-auth.guard';
 
 @Controller('auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService) { }
+    constructor(private authService: AuthService) { }
 
-    // 🟢 Implémentation de la route POST /auth/login (Phase GREEN)
-    // Utilise le AuthGuard('local') pour déclencher LocalStrategy.validate
-    @UseGuards(AuthGuard('local'))
+    // Route POST /auth/login
+    // Le @UseGuards(LocalAuthGuard) exécute la LocalStrategy pour valider les identifiants.
+    @UseGuards(LocalAuthGuard)
     @Post('login')
-    async login(@Request() req: any) {
-        // Si le guard passe, req.user contient l'utilisateur validé
-        // Nous passons req.user au service d'authentification pour générer le JWT.
+    async login(@Request() req) {
+        // Si l'authentification réussit, req.user est disponible.
+        // authService.login génère le token JWT en utilisant les données de req.user.
         return this.authService.login(req.user);
     }
 }

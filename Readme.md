@@ -104,9 +104,20 @@ Génération,N/A,N/A,"Création du module Auth avec UserService et JwtService in
 3 (Route),login / POST /auth/login, PASS,"Le contrôleur utilise la *LocalStrategy* pour valider l'utilisateur et retourner le JWT."
 Bilan,Authentification, TERMINÉE,"Le service d'authentification est complet. Prochaine étape : Implémentation des Guards JWT."
 
+
 # Résolution des Erreurs de Compilation (Typage Decimal)
 
 Fichier,Correction Appliquée,Statut  
 src/bet/bet.service.ts,Utilisation de l'importation directe de la classe Decimal de la librairie sous-jacente (decimal.js) pour la création d'instances et les calculs (new Decimal(amountNum)). Cela a nécessité l'installation du paquet decimal.js.,Résolu  
 src/bet/bet.service.ts,Correction d'une erreur de syntaxe (throw throw...) introduite lors des itérations précédentes.,Résolu  
 src/auth/jwt.strategy.ts,"Correction du type de l'identifiant utilisateur (sub) dans l'interface JwtPayload de number à string, afin de correspondre au type UUID utilisé par Prisma pour la table users.",Résolu  
+
+
+# Résolution des Erreurs de Résolution de Dépendances (NestJS)
+
+Fichier,Correction Appliquée,Statut  
+src/prisma/prisma.module.ts,Ajout de l'exportation de PrismaService dans le tableau exports du module pour le rendre visible aux autres modules.,Résolu  
+src/match/match.module.ts,Ajout de PrismaModule au tableau imports.,Résolu  
+src/team/team.module.ts,Ajout de PrismaModule au tableau imports.,Résolu  
+src/bet/bet.module.ts,Ajout de PrismaModule au tableau imports.,Résolu  
+src/user/user.module.ts,"Ajout de PrismaModule au tableau imports. De plus, UserService a été ajouté au tableau exports pour permettre son injection par d'autres modules (notamment AuthModule).",Résolu  

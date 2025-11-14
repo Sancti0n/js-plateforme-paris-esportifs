@@ -1,58 +1,63 @@
+// src/user/user.controller.ts
+
 import {
     Controller,
     Get,
+    Post,
     Body,
     Patch,
     Param,
     Delete,
-    Post,
-    UseGuards, // Import pour la sécurité
-    Request // Import pour accéder à l'objet requête
+    UseGuards,
+    Request
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { AuthGuard } from '@nestjs/passport'; // Import pour utiliser le guard 'jwt'
+// Import du Guard JWT (nom de fichier corrigé en 'jwt-auth.guard')
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('user')
 export class UserController {
     constructor(private readonly userService: UserService) { }
 
+    // 1. Inscription : Route POST publique
     @Post()
     create(@Body() createUserDto: CreateUserDto) {
         return this.userService.create(createUserDto);
     }
 
-    // ----------------------------------------------------------------------------------
-    // NOUVELLE ROUTE SÉCURISÉE : Récupérer le profil de l'utilisateur connecté
-    // ----------------------------------------------------------------------------------
-    @UseGuards(AuthGuard('jwt')) // 🔒 Protège cette route en utilisant la stratégie 'jwt'
+    // 2. Profil de l'utilisateur connecté (/user/me) : Protégée
+    @UseGuards(JwtAuthGuard)
     @Get('me')
-    getProfile(@Request() req) {
-        // Le payload du JWT (défini dans jwt.strategy.ts) est injecté dans req.user
-        // Il contient { userId, email }
+    getMe(@Request() req) {
+        // Le Guard attache l'objet utilisateur (avec l'ID) à req.user
         return this.userService.findOne(req.user.userId);
     }
-    // ----------------------------------------------------------------------------------
-    // FIN NOUVELLE ROUTE SÉCURISÉE
-    // ----------------------------------------------------------------------------------
 
+    // 3. Récupération de tous les utilisateurs : Protégée (nécessite un rôle Admin idéalement)
+    @UseGuards(JwtAuthGuard)
     @Get()
     findAll() {
         return this.userService.findAll();
     }
 
-    // ... (Le reste du contrôleur reste inchangé)
+    // 4. Récupération par ID : Protégée
+    @UseGuards(JwtAuthGuard)
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.userService.findOne(id);
     }
 
+    // 5. Mise à jour : Protégée
+    @UseGuards(JwtAuthGuard)
     @Patch(':id')
     update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
         return this.userService.update(id, updateUserDto);
     }
 
+    // 6. Suppression : Protégée
+    @UseGuards(JwtAuthGuard)
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.userService.remove(id);

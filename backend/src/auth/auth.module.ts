@@ -9,12 +9,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config'; // <-- NÉCESSAIRE
 import { PassportModule } from '@nestjs/passport'; // <-- NÉCESSAIRE pour les stratégies (Local/JWT)
 import { LocalStrategy } from './local.strategy'; // <-- NÉCESSAIRE pour la connexion
 import { JwtStrategy } from './jwt.strategy'; // <-- NÉCESSAIRE pour la sécurisation des routes
+import { PrismaModule } from '../prisma/prisma.module';
+
 
 @Module({
     imports: [
         UserModule,
         PassportModule,
         ConfigModule,
+        PrismaModule,
         // Configuration du module JWT
         JwtModule.registerAsync({
             imports: [ConfigModule],

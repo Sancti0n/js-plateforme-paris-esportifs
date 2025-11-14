@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 // Le type pour s'assurer que l'objet retourné n'a pas le hash ni les timestamps

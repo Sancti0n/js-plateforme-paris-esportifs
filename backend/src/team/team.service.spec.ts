@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TeamService } from './team.service';
+import '@types/jest';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto'; // Ajout
@@ -52,8 +53,10 @@ describe('TeamService (TDD - CRUD Complet)', () => {
       name: 'Team Vitality',
       acronym: 'VIT',
       logoUrl: 'http://logo.com/vit.png',
+      tag: 'teamTag',
     };
-    const expectedResult = { id: 1, ...teamData, createdAt: new Date() };
+    // CORRECTION: ID converti en string
+    const expectedResult = { id: '1', ...teamData, createdAt: new Date() };
 
     prismaServiceMock.team.create.mockResolvedValue(expectedResult);
 
@@ -68,8 +71,9 @@ describe('TeamService (TDD - CRUD Complet)', () => {
   // =============================================================
   it('should return an array of all teams', async () => {
     const teamsList = [
-      { id: 1, name: 'Team Vitality', acronym: 'VIT', logoUrl: 'url1', createdAt: new Date() },
-      { id: 2, name: 'G2 Esports', acronym: 'G2', logoUrl: 'url2', createdAt: new Date() },
+      // CORRECTION: IDs convertis en string
+      { id: '1', name: 'Team Vitality', acronym: 'VIT', logoUrl: 'url1', createdAt: new Date() },
+      { id: '2', name: 'G2 Esports', acronym: 'G2', logoUrl: 'url2', createdAt: new Date() },
     ];
 
     prismaServiceMock.team.findMany.mockResolvedValue(teamsList);
@@ -84,7 +88,8 @@ describe('TeamService (TDD - CRUD Complet)', () => {
   // 3. TESTS READ - findOne (Existants)
   // =============================================================
   it('should return a single team by its ID', async () => {
-    const teamId = 1;
+    // CORRECTION: teamId est une string
+    const teamId = '1';
     const expectedTeam = {
       id: teamId,
       name: 'Team Vitality',
@@ -102,7 +107,8 @@ describe('TeamService (TDD - CRUD Complet)', () => {
   });
 
   it('should return null if the team is not found', async () => {
-    const teamId = 99;
+    // CORRECTION: teamId est une string
+    const teamId = '99';
 
     prismaServiceMock.team.findUnique.mockResolvedValue(null);
 
@@ -116,7 +122,8 @@ describe('TeamService (TDD - CRUD Complet)', () => {
   // 4. TESTS UPDATE (Existants)
   // =============================================================
   it('should successfully update a team and return the updated object', async () => {
-    const teamId = 1;
+    // CORRECTION: teamId est une string
+    const teamId = '1';
     const updateData: UpdateTeamDto = { name: 'Team Vitality 2.0' };
     const originalTeam = {
       id: teamId,
@@ -140,7 +147,8 @@ describe('TeamService (TDD - CRUD Complet)', () => {
   });
 
   it('should return null when attempting to update a non-existent team', async () => {
-    const teamId = 99;
+    // CORRECTION: teamId est une string
+    const teamId = '99';
     const updateData: UpdateTeamDto = { name: 'Team Inexistante' };
 
     prismaServiceMock.team.findUnique.mockResolvedValue(null);
@@ -152,10 +160,11 @@ describe('TeamService (TDD - CRUD Complet)', () => {
   });
 
   // =============================================================
-  // 5. TESTS DELETE (Problématiques)
+  // 5. TESTS DELETE (Corrigés)
   // =============================================================
   it('should successfully remove a team and return the deleted object', async () => {
-    const teamId = 1;
+    // CORRECTION: teamId est une string
+    const teamId = '1';
     const deletedTeam = {
       id: teamId,
       name: 'To be deleted',
@@ -179,7 +188,8 @@ describe('TeamService (TDD - CRUD Complet)', () => {
   });
 
   it('should return null when attempting to remove a non-existent team', async () => {
-    const teamId = 99;
+    // CORRECTION: teamId est une string
+    const teamId = '99';
 
     // Simuler que l'équipe est INTROUVABLE (findUnique retourne null)
     prismaServiceMock.team.findUnique.mockResolvedValue(null);
